@@ -1,121 +1,109 @@
 import csv
 import pandas as pd
 import numpy as np
-from collections import defaultdict
 import random
+import math
 
-origins = pd.read_csv('data_nodes.csv', header=0, sep=',')
+import json
 
-# 球心坐标
-circle = [0,0,-1350]
+from globalVariables import *
+import cliqueSearch
+import cliqueCalc
+import node
 
-# 计算节点对球心的方向向量
-vectors = pd.DataFrame()
-vectors['num'] = origins['num']
-vectors['xn'] = origins['x'] - circle[0]
-vectors['yn'] = origins['y'] - circle[1]
-vectors['zn'] = origins['z'] - circle[2]
-vectors['length'] = np.sqrt(vectors['xn']**2 + vectors['yn']**2 + vectors['zn']**2)
-vectors['xn'] /= vectors['length'] 
-vectors['yn'] /= vectors['length']
-vectors['zn'] /= vectors['length']
+## 变量找不到就去全局变量
 
-# 计算三维坐标形式的节点偏移量
-measures = pd.read_csv('data_measure.csv', header=0, sep=',')
-diffXYZs = pd.DataFrame()
-diffXYZs['x'] = measures['x'] - origins['x']
-diffXYZs['y'] = measures['y'] - origins['y']
-diffXYZs['z'] = measures['z'] - origins['z']
+def normalRandom(u1, u2, mean, var):
+    return math.sqrt(-2 * math.log(u1)) * math.sin(2 * math.pi * u2) * math.sqrt(var) + mean
 
-# 计算径向偏移
-diffs = pd.DataFrame()
-diffs['num'] = vectors['num']
-diffs['originX'] = origins['x']
-diffs['originY'] = origins['y']
-diffs['originZ'] = origins['z']
-diffs['p'] = diffXYZs['x'] * vectors['xn'] + diffXYZs['y'] * vectors['yn'] + diffXYZs['z'] * vectors['zn']
+def mean(measureNodes):
+    mean = 0
+    for measureNode in measureNodes:
+        mean += nodeMap[measureNode]['value']
+    if len(measureNodes) > 0:
+        mean = mean / len(measureNodes)
+    return mean
 
-# 存储每个点的所有相邻点
-edges = pd.read_csv('data_elements.csv', header=0, sep=',')
-neighbors = defaultdict(list)
-for index, edge in edges.iterrows():
-    neighbors[int(edge['vi'])].append(int(edge['vj']))
-    neighbors[int(edge['vj'])].append(int(edge['vi']))
+def var(measureNodes):
+    ave = mean(measureNodes)
+    var = 0
+    if (len(measureNodes) <= 1):
+        return 0
+    for measureNode in measureNodes:
+        var += math.pow((nodeMap[measureNode]['value'] - ave), 2)
+    var = var / (len(measureNodes) - 1)
+    return var
 
-
-cliquesHash = {}    # 存储最大团的hash
-cliquesNotMax = {}  # 由于算法存在伪最大团，将算法中间过程的团存储在这里，最后filter
-def findNeighbors(nodes: list):
-    res = []
-    for node in nodes:
-        nodeNeighbor = neighbors[node]
-        res.extend(nodeNeighbor)
-    res = list(set(res))
-    for node in nodes:
-        if node in res:
-            res.remove(node)
+def pcc(nodes):
+    n = len(nodes)
+    # print(valueSum)
+    nodes['xy'] = nodes['x'] * nodes['y']
+    nodes['xx'] = nodes['x'] * nodes['x']
+    nodes['yy'] = nodes['y'] * nodes['y']
+    valueSum = nodes.apply(sum)
+    res = (n * valueSum['xy'] - valueSum['x'] * valueSum['y']) / (n * valueSum['xx'] - valueSum['x']**2)**0.5 / (n * valueSum['yy'] - valueSum['y']**2)**0.5
     return res
 
-def myhash(nodes: list):
-    res = 0
-    for node in nodes:
-        res += node**2
-    res = np.sqrt(res)/len(nodes)
-    return res
+if __name__ == "__main__":
+    # 递归查找结构中的所有最大团
+    cliques = cliqueSearch.CliqueSearch().searchCliques()
+    
+    pccRes = []
 
-def generateCliques(nodes: list, groups: list):
-    # 查找节点组的全部相邻节点
-    nodeNeighbors = findNeighbors(nodes)
-    # 每个相邻节点判断是否与所有nodes中的节点相邻
-    for neighbor in nodeNeighbors:
-        isNeignbor = True
-        for node in nodes:
-            if neighbor not in neighbors[node]:
-                # 临近点不是团节点，则去重后添加当前的节点团
-                # TODO 去掉重复clique
-                if myhash(nodes) not in cliquesHash.keys():
-                    groups.append(nodes)
-                    cliquesHash[myhash(nodes)] = nodes
-                isNeignbor = False
-                break
-        if isNeignbor:
-            cliquesNotMax[myhash(nodes)] = nodes
-            newNodes = nodes.copy()
-            newNodes.append(neighbor)
-            generateCliques(newNodes, groups)
+    # 生成测量节点 5- 50个
+    for i in range(5, 51):
+        # 每种数量运算10中不同的测点
+        for j in range(10):
+            nodelist = {}
+            # TODO 生成的sample应该是所有nodelist
+            measureNodes = random.sample(range(1, 91), i)
+            # 测量节点mean
+            mu = mean(measureNodes)
+            # 测量节点sigma
+            sigma = math.sqrt(var(measureNodes))
+            # 生成与节点数相同的正态随机数
+            rd = np.random.normal(mu, sigma, len(nodeMap))
+            # 初始化节点偏差
+            idx = 0
+            for nodeNum, node in nodeMap.items():
+                if nodeNum in measureNodes:
+                    # 采用测量数据
+                    nodelist[nodeNum] = {
+                        'x': node['x'],
+                        'y': node['y'],
+                        'z': node['z'],
+                        'value': node['value'],
+                    }
+                else:
+                    # 采用随机数初始化
+                    nodelist[nodeNum] = {
+                        'x': node['x'],
+                        'y': node['y'],
+                        'z': node['z'],
+                        'value': rd[idx],
+                    }
+                idx += 1
+            # print(measureNodes, end='\r\n')
+            # print(json.dumps(nodelist, indent=1))
 
-
-# 遍历节点, 生成cliques
-cliques = []
-for index, node in origins.iterrows():
-    # 寻找节点的相邻点
-    generateCliques([node['num']], cliques)
-cliques = list(filter(lambda x: myhash(x) not in cliquesNotMax.keys(), cliques))
-
-def normalRandom():
-    pass
-
-# 生成测量节点 5- 50个
-for i in range(5,50):
-    # 每种数量运算10次
-    for j in range(1,10):
-        nodelist = {}
-        measureNodes = random.sample(range(1, 91), i)
-        for idx, diff in diffs.iterrows():
-            if diff['num'] in measureNodes:
-                # 采用测量数据
-                nodelist[int(diff['num'])] = {
-                    x: diff['originX'],
-                    y: diff['originY'],
-                    z: diff['originZ'],
-                    value: diff['p'],
-                }
-            else:
-                # 采用随机数初始化
-                nodelist[int(diff['num'])] = {
-                    x: diff['originX'],
-                    y: diff['originY'],
-                    z: diff['originZ'],
-                    value: normalRandom(),
-                }
-                pass
+            # 迭代过程，遍历所有计算节点
+            for iterTick in range(4):
+                for nodeNum, node in nodeMap.items():
+                    if nodeNum in measureNodes:
+                        continue
+                    cliqueCalc.iterNode(nodeNum, cliques, nodelist)
+            res = pd.DataFrame.from_dict(nodelist, orient='index')
+            real = pd.DataFrame.from_dict(nodeMap, orient='index')
+            data = pd.DataFrame()
+            data['x'] = res['value']
+            data['y'] = real['value']
+            print(measureNodes, end='\r\n')
+            # pccRes[i].append(pcc(data))
+            pccRes.append({
+                'num': i,
+                'pcc': pcc(data)
+            })
+    print(json.dumps(pccRes, indent=1))
+    pd.DataFrame(pccRes).to_csv('res.csv')
+            # print(real)
+            # print(data)
