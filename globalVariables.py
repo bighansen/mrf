@@ -2,8 +2,10 @@ import pandas as pd
 import numpy as np
 from collections import defaultdict
 
+excludeSupport = True
+
 # 原始坐标
-origins = pd.read_csv('data_nodes.csv', header=0, sep=',')
+origins = pd.read_csv('data/data_nodes.csv', header=0, sep=',')
 # 球心坐标
 circle = [0,0,-1350]
 
@@ -19,7 +21,8 @@ vectors['yn'] /= vectors['length']
 vectors['zn'] /= vectors['length']
 
 # 计算三维坐标形式的节点偏移量
-measures = pd.read_csv('data_measure.csv', header=0, sep=',')
+_data_measure_filename = 'data/data_measure.csv'
+measures = pd.read_csv(_data_measure_filename, header=0, sep=',')
 diffXYZs = pd.DataFrame()
 diffXYZs['x'] = measures['x'] - origins['x']
 diffXYZs['y'] = measures['y'] - origins['y']
@@ -43,7 +46,7 @@ for idx, diff in diffs.iterrows():
     }
 
 # 存储每个点的所有相邻点
-edges = pd.read_csv('data_elements.csv', header=0, sep=',')
+edges = pd.read_csv('data/data_elements.csv', header=0, sep=',')
 neighbors = defaultdict(list)
 for index, edge in edges.iterrows():
     neighbors[int(edge['vi'])].append(int(edge['vj']))

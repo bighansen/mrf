@@ -1,2 +1,3 @@
-res.*
+res*
+stochastic_res*
 __pycache__/
