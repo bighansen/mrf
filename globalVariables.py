@@ -4,12 +4,12 @@ from collections import defaultdict
 
 excludeSupport = True
 
-# 原始坐标
+# 原始坐标 raw theoretical node data
 origins = pd.read_csv('data/data_nodes.csv', header=0, sep=',')
-# 球心坐标
+# 球心坐标 circle center
 circle = [0,0,-1350]
 
-# 计算节点对球心的方向向量
+# 计算节点对球心的方向向量 direction vectors
 vectors = pd.DataFrame()
 vectors['num'] = origins['num']
 vectors['xn'] = origins['x'] - circle[0]
@@ -20,7 +20,7 @@ vectors['xn'] /= vectors['length']
 vectors['yn'] /= vectors['length']
 vectors['zn'] /= vectors['length']
 
-# 计算三维坐标形式的节点偏移量
+# 计算三维坐标形式的节点偏移量 nodal coordinate diffs
 _data_measure_filename = 'data/data_measure.csv'
 measures = pd.read_csv(_data_measure_filename, header=0, sep=',')
 diffXYZs = pd.DataFrame()
@@ -28,7 +28,7 @@ diffXYZs['x'] = measures['x'] - origins['x']
 diffXYZs['y'] = measures['y'] - origins['y']
 diffXYZs['z'] = measures['z'] - origins['z']
 
-# 计算径向偏移
+# 计算径向偏移 diffs along radius
 diffs = pd.DataFrame()
 diffs['num'] = vectors['num']
 diffs['x'] = origins['x']
@@ -45,7 +45,7 @@ for idx, diff in diffs.iterrows():
         'value': diff['value']
     }
 
-# 存储每个点的所有相邻点
+# 存储每个点的所有相邻点 find neighbors nodes of each node
 edges = pd.read_csv('data/data_elements.csv', header=0, sep=',')
 neighbors = defaultdict(list)
 for index, edge in edges.iterrows():

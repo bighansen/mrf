@@ -13,8 +13,6 @@ from util import *
 import cliqueSearch
 import cliqueCalc
 
-## calculate pcc set with each count of measured nodes
-
 if __name__ == "__main__":
     # 递归查找结构中的所有最大团
     cliques = cliqueSearch.CliqueSearch().searchCliques()
